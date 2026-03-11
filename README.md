@@ -166,6 +166,37 @@ A TRADE WILL START FOR A COIN IF THAT COIN REACHES A LONG LEVEL OF 3 OR HIGHER W
 
 ---
 
+## Mobile Web Dashboard
+
+PowerTrader AI includes a mobile-responsive web dashboard (`pt_web.py`) that lets you monitor and control the bot from your phone or any browser on your local network.
+
+### Launch from the desktop Hub
+
+In the Hub, click **Mobile → Start Web Dashboard…**, enter a port (default: 5000), and click OK.  
+Then open **http://\<your-computer-IP\>:5000** on your phone.
+
+### Launch from the command line (headless / server use)
+
+```bash
+python pt_web.py
+# or with custom port / host:
+python pt_web.py --port 5000 --host 0.0.0.0
+```
+
+### What the dashboard shows
+
+- **Account summary** – total value, holdings value, buying power, % in trade
+- **Realized P&L** and closed-trade count
+- **Account value sparkline** – visual history of your account value
+- **Neural signals** – per-coin LONG / SHORT signal bars with live levels
+- **Active positions** – current trades with cost basis, P&L, DCA info, and trail line
+- **Recent trades** – last 50 buy/sell events with timestamps and P&L
+- **Bot controls** – Start / Stop Neural Runner and Trader directly from mobile
+
+The dashboard auto-refreshes every 5 seconds.  It is read-only safe — the controls only start/stop the same scripts that `pt_hub.py` manages.
+
+---
+
 ## Adding more coins (later)
 
 1. Open **Settings**
