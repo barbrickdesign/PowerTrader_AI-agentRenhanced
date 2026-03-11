@@ -10,6 +10,7 @@ import subprocess
 import shutil
 import glob
 import bisect
+import socket
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 import tkinter as tk
@@ -1979,6 +1980,20 @@ class PowerTraderHub(tk.Tk):
         )
         m_settings.add_command(label="Settings...", command=self.open_settings_dialog)
         menubar.add_cascade(label="Settings", menu=m_settings)
+
+        m_web = tk.Menu(
+            menubar,
+            tearoff=0,
+            bg=DARK_BG2,
+            fg=DARK_FG,
+            activebackground=DARK_SELECT_BG,
+            activeforeground=DARK_SELECT_FG,
+        )
+        m_web.add_command(label="Start Web Dashboard…", command=self._start_web_dashboard)
+        m_web.add_command(label="Stop Web Dashboard",   command=self._stop_web_dashboard)
+        m_web.add_separator()
+        m_web.add_command(label="Open in Browser",      command=self._open_web_dashboard_browser)
+        menubar.add_cascade(label="Mobile", menu=m_web)
 
         m_file = tk.Menu(
             menubar,
@@ -5317,12 +5332,96 @@ class PowerTraderHub(tk.Tk):
         ttk.Button(btns, text="Cancel", command=win.destroy).pack(side="left", padx=8)
 
 
+    # ---- web dashboard ----
+
+    def _start_web_dashboard(self) -> None:
+        """Launch pt_web.py as a background process so the mobile dashboard is accessible."""
+        if getattr(self, "_web_proc", None) is not None:
+            if self._web_proc.poll() is None:
+                messagebox.showinfo(
+                    "Web Dashboard",
+                    "Dashboard is already running.\nOpen: http://localhost:{}".format(getattr(self, "_web_port", 5000))
+                )
+                return
+
+        web_script = os.path.join(self.project_dir, "pt_web.py")
+        if not os.path.isfile(web_script):
+            messagebox.showerror("Web Dashboard", "pt_web.py not found in:\n{}".format(self.project_dir))
+            return
+
+        from tkinter.simpledialog import askinteger
+        port = askinteger("Web Dashboard Port", "Enter port number:", initialvalue=5000, minvalue=1024, maxvalue=65535)
+        if port is None:
+            return
+
+        try:
+            env = dict(os.environ)
+            proc = subprocess.Popen(
+                [sys.executable, web_script, "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=self.project_dir,
+                env=env,
+            )
+            self._web_proc = proc
+            self._web_port = port
+            # Determine local network IP for the hint message
+            try:
+                _s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                _s.connect(("8.8.8.8", 80))
+                _local_ip = _s.getsockname()[0]
+                _s.close()
+            except Exception:
+                _local_ip = "your-computer-ip"
+            messagebox.showinfo(
+                "Web Dashboard Started",
+                (
+                    "Mobile dashboard running on port {port}.\n\n"
+                    "Local (this machine):\n"
+                    "  http://localhost:{port}\n\n"
+                    "Phone / other devices on your network:\n"
+                    "  http://{ip}:{port}\n\n"
+                    "(Use ipconfig / ip addr to confirm your IP if needed.)"
+                ).format(port=port, ip=_local_ip)
+            )
+        except Exception as exc:
+            messagebox.showerror("Web Dashboard", "Failed to start web dashboard:\n{}".format(exc))
+
+    def _stop_web_dashboard(self) -> None:
+        proc = getattr(self, "_web_proc", None)
+        if proc is None or proc.poll() is not None:
+            messagebox.showinfo("Web Dashboard", "Web dashboard is not running.")
+            return
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            self._web_proc = None
+            messagebox.showinfo("Web Dashboard", "Web dashboard stopped.")
+        except Exception as exc:
+            messagebox.showerror("Web Dashboard", "Failed to stop web dashboard:\n{}".format(exc))
+
+    def _open_web_dashboard_browser(self) -> None:
+        import webbrowser
+        port = getattr(self, "_web_port", 5000)
+        url = "http://localhost:{}".format(port)
+        webbrowser.open(url)
+
     # ---- close ----
 
     def _on_close(self) -> None:
         # Don’t force kill; just stop if running (you can change this later)
         try:
             self.stop_all_scripts()
+        except Exception:
+            pass
+        # Stop web dashboard if running
+        try:
+            proc = getattr(self, "_web_proc", None)
+            if proc and proc.poll() is None:
+                proc.terminate()
         except Exception:
             pass
         self.destroy()
